@@ -61,22 +61,44 @@ function generateDataForCompany(company) {
   return data;
 }
 
+const generateUserData = async (db) => {
+  const userCollection = db.collection('users');
+  
+  // Default user data
+  const defaultUser = {
+    username: 'testuser',
+    accountNumber: '1234567890',
+    balance: 1000000,
+    email: 'test@example.com',
+    createdAt: new Date(),
+    lastUpdated: new Date()
+  };
+
+  // Insert user
+  await userCollection.insertOne(defaultUser);
+  console.log('Default user created successfully');
+};
+
 // Main function to generate and store data
 async function generateAndStoreData() {
   const client = new MongoClient(MONGO_URI);
 
   try {
     await client.connect();
+    console.log('Connected to MongoDB');
+    
     const db = client.db(DATABASE_NAME);
-    const collection = db.collection(COLLECTION_NAME);
-
+    
+    // Generate user data first
+    await generateUserData(db);
+    
     // Clear existing data
-    await collection.deleteMany({});
+    await db.collection(COLLECTION_NAME).deleteMany({});
 
     // Generate and insert data for each company
     for (const company of COMPANY_DATA) {
       const companyData = generateDataForCompany(company);
-      await collection.insertMany(companyData);
+      await db.collection(COLLECTION_NAME).insertMany(companyData);
       console.log(`Generated data for ${company.symbol}`);
     }
 

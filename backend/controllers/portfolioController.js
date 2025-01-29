@@ -1,20 +1,39 @@
 const Portfolio = require('../models/Portfolio');
 const TradeHistory = require('../models/TradeHistory');
 const Company = require('../models/Company');
+const User = require('../models/User');
 
 exports.buyShares = async (req, res) => {
   try {
-    const { symbol, quantity, buyDate } = req.body; // Changed from req.query to req.body
+    const { symbol, quantity, buyDate } = req.body;
+    const userId = "679a3497cf47a1fb86c7f84f";
     const parsedQuantity = parseInt(quantity);
+
+    // Get user and check balance
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('User not found:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     const companyData = await Company.findOne({
       symbol,
-      date: new Date(buyDate)
-    });
+      date: { $lte: new Date(buyDate) }
+    }).sort({ date: -1 }).limit(1);
 
     if (!companyData) {
+      console.log('No company data found for:', symbol, buyDate);
       return res.status(404).json({ error: 'No price data found for this date' });
     }
+
+    const totalCost = companyData.closing_price * parsedQuantity;
+    if (user.balance < totalCost) {
+      return res.status(400).json({ error: 'Insufficient funds' });
+    }
+
+    // Deduct from user balance
+    user.balance -= totalCost;
+    await user.save();
 
     // Create trade history with pending status
     const tradeHistory = new TradeHistory({
@@ -26,57 +45,41 @@ exports.buyShares = async (req, res) => {
       date: new Date(buyDate),
       price: companyData.closing_price,
       quantity: parsedQuantity,
-      total: companyData.closing_price * parsedQuantity,
-      pnl: 0,
-      pnlPercent: 0
+      total: companyData.closing_price * parsedQuantity
     });
 
     await tradeHistory.save();
 
-    // Set timeout to update status after 1 minute
+    // Update portfolio after 1 minute
     setTimeout(async () => {
       tradeHistory.status = 'Completed';
       await tradeHistory.save();
-      
-      // Update portfolio after status is completed
+
+      // Update or create portfolio entry
       let portfolio = await Portfolio.findOne({ symbol });
-      
       if (!portfolio) {
-        // First purchase
-        const initialTotalValue = companyData.closing_price * parsedQuantity;
-        
         portfolio = new Portfolio({
           symbol,
-          company_name: companyData.company_name,
-          sector: companyData.sector,
-          buy_dates: [buyDate],
-          buy_prices: [companyData.closing_price],
-          sell_dates: [],
-          sell_prices: [],
           quantity: parsedQuantity,
-          avg_price: companyData.closing_price,
-          total_value: initialTotalValue
+          avg_price: companyData.closing_price
         });
       } else {
-        // Calculate new values
-        const newPurchaseCost = parsedQuantity * companyData.closing_price;
         const totalQuantity = portfolio.quantity + parsedQuantity;
-        const newAveragePrice = (portfolio.total_value + newPurchaseCost) / totalQuantity;
-        const newTotalValue = portfolio.total_value + newPurchaseCost;
-        
-        // Update portfolio
-        portfolio.buy_dates.push(buyDate);
-        portfolio.buy_prices.push(companyData.closing_price);
+        const totalCost = (portfolio.avg_price * portfolio.quantity) + (companyData.closing_price * parsedQuantity);
         portfolio.quantity = totalQuantity;
-        portfolio.avg_price = Number(newAveragePrice.toFixed(2));
-        portfolio.total_value = Number(newTotalValue.toFixed(2));
+        portfolio.avg_price = totalCost / totalQuantity;
       }
-
       await portfolio.save();
-    }, 60000); // 1 minute
+    }, 60000);
 
-    res.json({ message: 'Order placed successfully', tradeId: tradeHistory._id });
+    res.json({ 
+      message: 'Buy order placed successfully', 
+      tradeId: tradeHistory._id,
+      status: 'Pending'
+    });
+
   } catch (error) {
+    console.error('Buy shares error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -84,9 +87,21 @@ exports.buyShares = async (req, res) => {
 exports.sellShares = async (req, res) => {
   try {
     const { symbol, quantity, sellDate } = req.body;
+    const userId = "679a3497cf47a1fb86c7f84f"; // Hardcoded test user ID
     const parsedQuantity = parseInt(quantity);
 
+    console.log('Sell request:', { symbol, quantity, sellDate, userId });
+
+    // Get user first
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('User not found:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Find portfolio entry
     const portfolio = await Portfolio.findOne({ symbol });
+    console.log('Portfolio found:', portfolio);
     
     if (!portfolio) {
       return res.status(404).json({ error: 'Stock not found in portfolio' });
@@ -96,10 +111,13 @@ exports.sellShares = async (req, res) => {
       return res.status(400).json({ error: 'Insufficient shares to sell' });
     }
 
+    // Get latest company data
     const companyData = await Company.findOne({
       symbol,
-      date: new Date(sellDate)
-    });
+      date: { $lte: new Date(sellDate) }
+    }).sort({ date: -1 }).limit(1);
+
+    console.log('Company data found:', companyData);
 
     if (!companyData) {
       return res.status(404).json({ error: 'No price data found for this date' });
@@ -121,8 +139,9 @@ exports.sellShares = async (req, res) => {
     });
 
     await tradeHistory.save();
+    console.log('Trade history created:', tradeHistory);
 
-    // Update portfolio quantity
+    // Update portfolio immediately
     portfolio.quantity -= parsedQuantity;
     if (portfolio.quantity === 0) {
       await Portfolio.deleteOne({ symbol });
@@ -137,16 +156,16 @@ exports.sellShares = async (req, res) => {
       status: 'Pending'
     });
 
-    // Update status after 1 minute
+    // Update status and balance after 1 minute
     setTimeout(async () => {
       tradeHistory.status = 'Completed';
       await tradeHistory.save();
       
-      // Calculate final sale amount after completion
       const saleAmount = companyData.closing_price * parsedQuantity;
+      user.balance += saleAmount;
+      await user.save();
       
-      // The frontend will handle adding this amount to wallet
-      // when it receives the completed status
+      console.log('Trade completed, balance updated:', user.balance);
     }, 60000);
 
   } catch (error) {
