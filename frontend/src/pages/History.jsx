@@ -15,17 +15,34 @@ import Wallet from '../components/Wallet';
 
 // Add calculation functions at the top
 const calculateTradeStats = (trades) => {
-  if (!trades.length) return {
-    totalInvested: 0,
-    totalReceived: 0,
-    winRate: 0,
-    averagePnL: 0
-  };
+  console.log('Calculating stats for trades:', trades); // Debug log
+  
+  if (!trades || trades.length === 0) {
+    return {
+      totalInvested: 0,
+      totalReceived: 0,
+      winRate: 0,
+      averagePnL: 0
+    };
+  }
 
   const stats = trades.reduce((acc, trade) => {
-    const invested = trade.quantity * trade.buy_price;
-    const received = trade.sell_price ? trade.quantity * trade.sell_price : 0;
-    const isProfitable = received - invested > 0;
+    const quantity = Number(trade.quantity) || 0;
+    const buyPrice = Number(trade.buy_price) || 0;
+    const sellPrice = Number(trade.sell_price) || 0;
+    
+    const invested = quantity * buyPrice;
+    const received = sellPrice ? quantity * sellPrice : 0;
+    const isProfitable = received > invested;
+
+    console.log('Trade calculation:', { // Debug log
+      quantity,
+      buyPrice,
+      sellPrice,
+      invested,
+      received,
+      isProfitable
+    });
 
     return {
       totalInvested: acc.totalInvested + invested,
@@ -35,12 +52,15 @@ const calculateTradeStats = (trades) => {
     };
   }, { totalInvested: 0, totalReceived: 0, wins: 0, totalPnL: 0 });
 
-  return {
-    totalInvested: stats.totalInvested,
-    totalReceived: stats.totalReceived,
-    winRate: (stats.wins / trades.length) * 100,
-    averagePnL: stats.totalPnL / trades.length
+  const result = {
+    totalInvested: Number(stats.totalInvested.toFixed(2)) || 0,
+    totalReceived: Number(stats.totalReceived.toFixed(2)) || 0,
+    winRate: Number(((stats.wins / trades.length) * 100).toFixed(1)) || 0,
+    averagePnL: Number((stats.totalPnL / trades.length).toFixed(2)) || 0
   };
+
+  console.log('Final stats:', result); // Debug log
+  return result;
 };
 
 const History = () => {
@@ -69,24 +89,23 @@ const History = () => {
         type: filters.type !== 'all' ? filters.type : undefined,
         status: filters.status !== 'all' ? filters.status : undefined
       });
-
-      // Transform data
+      
+      console.log('Fetched trade data:', data); // Debug log
+      
+      // Transform data if needed
       const transformedData = data.map(trade => ({
-        id: trade._id,
-        symbol: trade.symbol,
-        type: trade.status.toUpperCase(),
-        shares: trade.quantity,
-        price: trade.price,
-        total: trade.price * trade.quantity,
-        date: new Date(trade.date).toISOString().split('T')[0],
-        status: 'Completed',
-        pnl: trade.pnl || calculatePnL(trade),
-        pnlPercent: trade.pnlPercent || calculatePnLPercent(trade)
+        ...trade,
+        quantity: Number(trade.quantity),
+        buy_price: Number(trade.buy_price),
+        sell_price: Number(trade.sell_price || 0)
       }));
-
+      
+      console.log('Transformed trade data:', transformedData); // Debug log
+      
       setTrades(transformedData);
       setLoading(false);
     } catch (err) {
+      console.error('Error fetching trade history:', err);
       setError(err.message);
       setLoading(false);
     }
@@ -98,19 +117,6 @@ const History = () => {
       const tradeValue = trade.price * trade.shares;
       return sum + tradeValue;
     }, 0);
-  };
-
-  const calculateTradeStats = (trades) => {
-    const totalTradedValue = calculateTotalTradedValue(trades);
-    const winningTrades = trades.filter(trade => trade.pnl > 0);
-    
-    return {
-      totalValue: totalTradedValue,
-      winRate: trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0,
-      avgReturn: trades.length > 0 ? 
-        trades.reduce((acc, trade) => acc + trade.pnlPercent, 0) / trades.length : 0,
-      totalPnL: trades.reduce((acc, trade) => acc + trade.pnl, 0)
-    };
   };
 
   useEffect(() => {
@@ -364,30 +370,30 @@ const History = () => {
           <tbody className="divide-y divide-gray-200">
             {sortedTrades.map((trade) => (
               <tr key={trade.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm">{trade.date}</td>
-                <td className="px-6 py-4 font-medium">{trade.symbol}</td>
+                <td className="px-6 py-4 text-sm">{trade.date || 'N/A'}</td>
+                <td className="px-6 py-4 font-medium">{trade.symbol || 'N/A'}</td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded-full text-sm ${
                     trade.type === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
-                    {trade.type}
+                    {trade.type || 'N/A'}
                   </span>
                 </td>
-                <td className="px-6 py-4">{trade.shares}</td>
-                <td className="px-6 py-4">${trade.price.toFixed(2)}</td>
-                <td className="px-6 py-4">${trade.total.toFixed(2)}</td>
+                <td className="px-6 py-4">{trade.quantity || 0}</td>
+                <td className="px-6 py-4">${(trade.price || 0).toFixed(2)}</td>
+                <td className="px-6 py-4">${((trade.quantity || 0) * (trade.price || 0)).toFixed(2)}</td>
                 <td className="px-6 py-4">
-                  <div className={`flex items-center ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {trade.pnl >= 0 ? 
+                  <div className={`flex items-center ${(trade.pnl || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {(trade.pnl || 0) >= 0 ? 
                       <TrendingUp size={16} className="mr-1" /> : 
                       <TrendingDown size={16} className="mr-1" />
                     }
-                    ${Math.abs(trade.pnl).toFixed(2)} ({trade.pnlPercent.toFixed(2)}%)
+                    ${Math.abs(trade.pnl || 0).toFixed(2)} ({(trade.pnlPercent || 0).toFixed(2)}%)
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <span className="px-2 py-1 rounded-full text-sm bg-green-100 text-green-800">
-                    {trade.status}
+                    {trade.status || 'N/A'}
                   </span>
                 </td>
               </tr>

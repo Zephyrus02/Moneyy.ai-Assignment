@@ -10,8 +10,7 @@ const Portfolio = mongoose.models.Portfolio || mongoose.model('Portfolio', new m
   sell_prices: [Number],
   avg_price: { type: Number, default: 0 },
   quantity: { type: Number, default: 0 },
-  invested_value: { type: Number, default: 0 },
-  return_value: { type: Number, default: 0 }
+  invested_value: { type: Number, default: 0 }
 }), 'portfolio');
 
 module.exports = Portfolio;
