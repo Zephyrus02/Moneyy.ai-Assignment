@@ -79,6 +79,7 @@ export const getPortfolioData = async () => {
 
 export const buyShares = async (params) => {
   try {
+    const { symbol, quantity, buyDate } = params;
     const response = await api.post('/buy', null, { params });
     return response.data;
   } catch (error) {
@@ -86,11 +87,16 @@ export const buyShares = async (params) => {
   }
 };
 
-export const sellShares = async (params) => {
+export const sellShares = async ({ symbol, quantity, sellDate }) => {
   try {
-    const response = await api.post('/sell', null, { params });
+    const response = await api.post('/sell', {
+      symbol,
+      quantity: parseInt(quantity),
+      sellDate
+    });
     return response.data;
   } catch (error) {
+    console.error('API Error:', error.response?.data || error.message);
     throw error;
   }
 };

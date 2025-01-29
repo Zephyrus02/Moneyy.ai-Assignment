@@ -11,6 +11,37 @@ import SearchBar from '../components/SearchBar';
 import FilterButton from '../components/FilterButton';
 import StatCard from '../components/StatCard';
 import { getTradeHistory } from '../api';
+import Wallet from '../components/Wallet';
+
+// Add calculation functions at the top
+const calculateTradeStats = (trades) => {
+  if (!trades.length) return {
+    totalInvested: 0,
+    totalReceived: 0,
+    winRate: 0,
+    averagePnL: 0
+  };
+
+  const stats = trades.reduce((acc, trade) => {
+    const invested = trade.quantity * trade.buy_price;
+    const received = trade.sell_price ? trade.quantity * trade.sell_price : 0;
+    const isProfitable = received - invested > 0;
+
+    return {
+      totalInvested: acc.totalInvested + invested,
+      totalReceived: acc.totalReceived + received,
+      wins: acc.wins + (isProfitable ? 1 : 0),
+      totalPnL: acc.totalPnL + (received - invested)
+    };
+  }, { totalInvested: 0, totalReceived: 0, wins: 0, totalPnL: 0 });
+
+  return {
+    totalInvested: stats.totalInvested,
+    totalReceived: stats.totalReceived,
+    winRate: (stats.wins / trades.length) * 100,
+    averagePnL: stats.totalPnL / trades.length
+  };
+};
 
 const History = () => {
   const [trades, setTrades] = useState([]);
@@ -155,6 +186,7 @@ const History = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Trade History</h1>
         <div className="flex items-center space-x-4">
+          <Wallet />
           <SearchBar
             placeholder="Search trades..."
             value={searchTerm}
@@ -263,26 +295,29 @@ const History = () => {
       {/* Trade Statistics */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         <StatCard
-          title="Total Traded Value"
-          value={tradeStats.totalValue}
-          format="currency"
+          title="Total Invested"
+          value={tradeStats.totalInvested}
           isPercentage={false}
+          isCurrency={true}
+        />
+        <StatCard
+          title="Total Received"
+          value={tradeStats.totalReceived}
+          isPercentage={false}
+          isCurrency={true}
         />
         <StatCard
           title="Win Rate"
           value={tradeStats.winRate}
           isPercentage={true}
+          decimals={1}
         />
         <StatCard
-          title="Average Return"
-          value={tradeStats.avgReturn}
-          isPercentage={true}
-        />
-        <StatCard
-          title="Total P&L"
-          value={tradeStats.totalPnL}
-          format="currency"
+          title="Average P&L"
+          value={tradeStats.averagePnL}
           isPercentage={false}
+          isCurrency={true}
+          isPositive={tradeStats.averagePnL > 0}
         />
       </div>
 

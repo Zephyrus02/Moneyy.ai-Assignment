@@ -10,6 +10,7 @@ import FilterButton from '../components/FilterButton';
 import SearchBar from '../components/SearchBar';
 import Chart from '../components/Chart';
 import { getCompanyAnalytics, getCompanyData } from '../api';
+import Wallet from '../components/Wallet';
 
 const Strategy = () => {
   const [loading, setLoading] = useState(true);
@@ -171,6 +172,7 @@ const Strategy = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Strategy Builder</h1>
         <div className="flex items-center space-x-4">
+          <Wallet />
           <SearchBar
             placeholder="Search stocks..."
             value={searchTerm}

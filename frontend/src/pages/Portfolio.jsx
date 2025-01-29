@@ -10,10 +10,13 @@ import {
 import FilterButton from '../components/FilterButton';
 import StatCard from '../components/StatCard';
 import SearchBar from '../components/SearchBar';
-import { getPortfolioData } from '../api';
+import Wallet from '../components/Wallet';
+import { getPortfolioData, sellShares } from '../api';
+import { useWallet } from '../context/WalletContext';
 
 // Assume holdings will be populated with portfolio data
 const Portfolio = () => {
+  const { updateBalance } = useWallet();
   const [sortConfig, setSortConfig] = useState({ key: 'value', direction: 'desc' });
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -26,21 +29,26 @@ const Portfolio = () => {
   const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showSellModal, setShowSellModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [sellQuantity, setSellQuantity] = useState('');
 
   useEffect(() => {
     const fetchPortfolio = async () => {
       try {
         const data = await getPortfolioData();
-        // Transform backend data into the format we need
+        // Transform backend data into the format we need with default values
         const transformedData = data.map(item => ({
           symbol: item.symbol,
           sector: item.sector,
-          shares: item.quantity,
-          avgPrice: item.avg_price,
-          currentPrice: item.current_price || item.avg_price, // Fallback to avg_price if current not available
-          value: item.total_value,
-          dailyChange: ((item.current_price - item.avg_price) / item.avg_price) * 100,
-          totalReturn: ((item.total_value - (item.avg_price * item.quantity)) / (item.avg_price * item.quantity)) * 100
+          shares: item.quantity || 0,
+          avgPrice: item.avg_price || 0,
+          currentPrice: item.current_price || item.avg_price || 0,
+          investedValue: (item.quantity || 0) * (item.avg_price || 0),
+          currentValue: (item.quantity || 0) * (item.current_price || item.avg_price || 0),
+          totalReturn: ((((item.quantity || 0) * (item.current_price || item.avg_price || 0)) - 
+                        ((item.quantity || 0) * (item.avg_price || 0))) / 
+                        ((item.quantity || 0) * (item.avg_price || 0)) * 100) || 0
         }));
         setPortfolio(transformedData);
         setLoading(false);
@@ -122,16 +130,53 @@ const Portfolio = () => {
 
   // Calculate portfolio statistics
   const portfolioStats = {
-    totalValue: portfolio.reduce((sum, holding) => sum + holding.value, 0),
-    investedValue: portfolio.reduce((sum, holding) => 
-      sum + (holding.avgPrice * holding.shares), 0),
-    dailyPnL: portfolio.reduce((sum, holding) => sum + holding.value, 0) - 
-      portfolio.reduce((sum, holding) => sum + (holding.avgPrice * holding.shares), 0),
+    totalValue: portfolio.reduce((sum, holding) => sum + holding.currentValue, 0),
+    investedValue: portfolio.reduce((sum, holding) => sum + holding.investedValue, 0),
+    dailyPnL: portfolio.reduce((sum, holding) => 
+      sum + (holding.currentValue - holding.investedValue), 0),
     totalReturn: portfolio.length ? 
-      ((portfolio.reduce((sum, holding) => sum + holding.value, 0) - 
-        portfolio.reduce((sum, holding) => sum + (holding.avgPrice * holding.shares), 0)) /
-        portfolio.reduce((sum, holding) => sum + (holding.avgPrice * holding.shares), 0) * 100).toFixed(2)
+      ((portfolio.reduce((sum, holding) => sum + holding.currentValue, 0) - 
+        portfolio.reduce((sum, holding) => sum + holding.investedValue, 0)) /
+        portfolio.reduce((sum, holding) => sum + holding.investedValue, 0) * 100) 
       : 0
+  };
+
+  const handleSell = async (stockSymbol, quantity) => {
+    try {
+      await sellShares({
+        symbol: stockSymbol,
+        quantity: parseInt(quantity), // Ensure quantity is a number
+        sellDate: new Date().toISOString().split('T')[0] // Format date as YYYY-MM-DD
+      });
+
+      // Update wallet balance
+      const saleValue = selectedStock.currentPrice * parseInt(quantity);
+      updateBalance(saleValue);
+
+      // Refresh portfolio data after successful sell
+      const updatedData = await getPortfolioData();
+      const transformedData = updatedData.map(item => ({
+        symbol: item.symbol,
+        sector: item.sector,
+        shares: item.quantity || 0,
+        avgPrice: item.avg_price || 0,
+        currentPrice: item.current_price || item.avg_price || 0,
+        investedValue: (item.quantity || 0) * (item.avg_price || 0),
+        currentValue: (item.quantity || 0) * (item.current_price || item.avg_price || 0),
+        totalReturn: ((((item.quantity || 0) * (item.current_price || item.avg_price || 0)) - 
+                      ((item.quantity || 0) * (item.avg_price || 0))) / 
+                      ((item.quantity || 0) * (item.avg_price || 0)) * 100) || 0
+      }));
+      
+      setPortfolio(transformedData);
+      setShowSellModal(false);
+      setSellQuantity('');
+      setSelectedStock(null);
+    } catch (error) {
+      console.error('Error selling shares:', error);
+      // Add error handling UI feedback here
+      alert('Failed to sell shares: ' + error.message);
+    }
   };
 
   return (
@@ -139,6 +184,7 @@ const Portfolio = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Portfolio Holdings</h1>
         <div className="flex items-center space-x-4">
+          <Wallet />
           <SearchBar
             placeholder="Search holdings..."
             value={searchTerm}
@@ -227,26 +273,62 @@ const Portfolio = () => {
         </div>
       )}
 
+      {showSellModal && selectedStock && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96">
+            <h3 className="text-xl font-bold mb-4">Sell {selectedStock.symbol}</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity (Max: {selectedStock.shares})
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={selectedStock.shares}
+                value={sellQuantity}
+                onChange={(e) => setSellQuantity(e.target.value)}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
+            <div className="flex justify-end space-x-4">
+              <button
+                className="px-4 py-2 text-gray-600"
+                onClick={() => setShowSellModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-red-500 text-white rounded-lg"
+                onClick={() => handleSell(selectedStock.symbol, sellQuantity)}
+                disabled={!sellQuantity || sellQuantity > selectedStock.shares}
+              >
+                Sell
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Portfolio Summary */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         <StatCard
           title="Total Portfolio Value"
-          value={portfolioStats.totalValue}
+          value={portfolioStats.totalValue || 0}
           isPercentage={false}
         />
         <StatCard
           title="Invested Value"
-          value={portfolioStats.investedValue}
+          value={portfolioStats.investedValue || 0}
           isPercentage={false}
         />
         <StatCard
           title="Daily P&L"
-          value={portfolioStats.dailyPnL}
+          value={portfolioStats.dailyPnL || 0}
           isPercentage={false}
         />
         <StatCard
           title="Total Return"
-          value={portfolioStats.totalReturn}
+          value={portfolioStats.totalReturn || 0}
           isPercentage={true}
         />
       </div>
@@ -295,17 +377,17 @@ const Portfolio = () => {
                 onClick={() => handleSort('value')}
               >
                 <div className="flex items-center space-x-2">
-                  <span>Value</span>
+                  <span>Invested Value</span>
                   {getSortIcon('value')}
                 </div>
               </th>
               <th 
                 className="px-6 py-4 text-left text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100"
-                onClick={() => handleSort('dailyChange')}
+                onClick={() => handleSort('value')}
               >
                 <div className="flex items-center space-x-2">
-                  <span>Daily Change</span>
-                  {getSortIcon('dailyChange')}
+                  <span>Current Value</span>
+                  {getSortIcon('value')}
                 </div>
               </th>
               <th 
@@ -316,6 +398,9 @@ const Portfolio = () => {
                   <span>Total Return</span>
                   {getSortIcon('totalReturn')}
                 </div>
+              </th>
+              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                Actions
               </th>
             </tr>
           </thead>
@@ -332,17 +417,23 @@ const Portfolio = () => {
                 <td className="px-6 py-4">{holding.shares}</td>
                 <td className="px-6 py-4">${holding.avgPrice.toFixed(2)}</td>
                 <td className="px-6 py-4">${holding.currentPrice.toFixed(2)}</td>
-                <td className="px-6 py-4">${holding.value.toLocaleString()}</td>
-                <td className="px-6 py-4">
-                  <span className={`flex items-center ${holding.dailyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {holding.dailyChange >= 0 ? <TrendingUp size={16} className="mr-1" /> : <TrendingDown size={16} className="mr-1" />}
-                    {Math.abs(holding.dailyChange).toFixed(2)}%
-                  </span>
-                </td>
+                <td className="px-6 py-4">${(holding.investedValue || 0).toLocaleString()}</td>
+                <td className="px-6 py-4">${(holding.currentValue || 0).toLocaleString()}</td>
                 <td className="px-6 py-4">
                   <span className={holding.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}>
                     {holding.totalReturn.toFixed(2)}%
                   </span>
+                </td>
+                <td className="px-6 py-4">
+                  <button
+                    onClick={() => {
+                      setSelectedStock(holding);
+                      setShowSellModal(true);
+                    }}
+                    className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded hover:bg-red-50"
+                  >
+                    Sell
+                  </button>
                 </td>
               </tr>
             ))}

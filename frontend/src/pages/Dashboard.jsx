@@ -6,6 +6,7 @@ import Chart from '../components/Chart';
 import PieChart from '../components/PieChart';
 import StrategyPerformance from '../components/StrategyPerformance';
 import RecentTrades from '../components/RecentTrades';
+import Wallet from '../components/Wallet';
 import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData } from '../api';
 
 // Helper function to calculate win rate
@@ -220,16 +221,16 @@ const Dashboard = () => {
     <div className="flex-1 p-8">
       {/* Top Bar */}
       <div className="flex justify-between items-center mb-8">
-        <SearchBar
-          placeholder="Search strategies..."
-          value={searchTerm}
-          onChange={setSearchTerm}
-        />
+        <h1 className="text-2xl font-bold">Dashboard</h1>
         <div className="flex items-center space-x-4">
+          <Wallet />
+          <SearchBar
+            placeholder="Search strategies..."
+            value={searchTerm}
+            onChange={setSearchTerm}
+          />
           <Bell className="text-gray-600 cursor-pointer" />
-          <a href="https://moneyy.ai/" target="_blank">
-            <LogOut className="text-gray-600 cursor-pointer" />
-          </a>
+          <LogOut className="text-gray-600 cursor-pointer" />
         </div>
       </div>
 

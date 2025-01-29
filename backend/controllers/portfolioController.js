@@ -71,7 +71,7 @@ exports.buyShares = async (req, res) => {
 };
 exports.sellShares = async (req, res) => {
   try {
-    const { symbol, quantity, sellDate } = req.query;
+    const { symbol, quantity, sellDate } = req.body;
 
     // Get company data for sell date
     const companyData = await Company.findOne({
