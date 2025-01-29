@@ -15,7 +15,7 @@ const StatCard = ({ title, value, change, isPercentage }) => {
       </div>
       {change && (
         <div className={`text-sm ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-          {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+          {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(2)}%
         </div>
       )}
     </div>

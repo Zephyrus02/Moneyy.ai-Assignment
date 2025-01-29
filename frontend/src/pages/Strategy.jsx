@@ -173,7 +173,7 @@ const Strategy = () => {
   // Add buy handler
   const handleBuy = async (stock, quantity) => {
     try {
-      const totalCost = stock.price * quantity;
+      const totalCost = Number((selectedStock.price * quantity).toFixed(2));
       
       if (totalCost > balance) {
         alert('Insufficient funds');
@@ -348,9 +348,9 @@ const Strategy = () => {
                     <p className="text-sm text-gray-500">{stock.name}</p>
                   </div>
                   <div className="flex flex-col items-end">
-                    <div className="font-medium">${stock.price.toFixed(2)}</div>
+                    <div className="font-medium">${Number(stock.price).toFixed(2)}</div>
                     <div className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {stock.change >= 0 ? '+' : ''}{stock.change}%
+                      {stock.change >= 0 ? '+' : ''}{Number(stock.change).toFixed(2)}%
                     </div>
                     <button
                       className="mt-2 px-4 py-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
@@ -392,10 +392,10 @@ const Strategy = () => {
               </div>
               <div className="mb-4">
                 <p className="text-sm text-gray-600">
-                  Total Cost: ${((selectedStockForBuy.price * buyQuantity) || 0).toFixed(2)}
+                  Total Cost: ${Number((selectedStockForBuy.price * buyQuantity) || 0).toFixed(2)}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Available Balance: ${balance.toLocaleString()}
+                  Available Balance: ${Number(balance).toFixed(2)}
                 </p>
               </div>
               <div className="flex justify-end space-x-4">

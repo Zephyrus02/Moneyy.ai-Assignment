@@ -9,14 +9,6 @@ import RecentTrades from '../components/RecentTrades';
 import Wallet from '../components/Wallet';
 import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData } from '../api';
 
-// Helper function to calculate win rate
-const calculateWinRate = (portfolioData) => {
-  if (!portfolioData || portfolioData.length === 0) return 0;
-  
-  const winningTrades = portfolioData.filter(trade => trade.dailyPnL > 0);
-  return Number(((winningTrades.length / portfolioData.length) * 100).toFixed(2));
-};
-
 // Strategy metrics calculation
 const calculateStrategyMetrics = (portfolio) => {
   return portfolio
@@ -73,6 +65,52 @@ const calculateSectorReturns = (portfolioData) => {
   }));
 };
 
+const calculateBestSector = (portfolioData) => {
+  if (!portfolioData?.length) {
+    return { sector: 'N/A', roi: 0 };
+  }
+
+  // Group by sector and calculate performance
+  const sectorPerformance = portfolioData.reduce((acc, holding) => {
+    const sector = holding.sector || 'Unknown';
+    
+    if (!acc[sector]) {
+      acc[sector] = {
+        totalInvested: 0,
+        currentValue: 0,
+        sectorName: sector
+      };
+    }
+    
+    const invested = holding.avg_price * holding.quantity;
+    const current = holding.current_price * holding.quantity;
+    
+    acc[sector].totalInvested += invested;
+    acc[sector].currentValue += current;
+    return acc;
+  }, {});
+
+  // Calculate ROI for each sector
+  const sectorROIs = Object.entries(sectorPerformance)
+    .filter(([_, values]) => values.totalInvested > 0)
+    .map(([sector, values]) => {
+      const roi = ((values.currentValue - values.totalInvested) / values.totalInvested) * 100;
+      return {
+        sector: values.sectorName,
+        roi: Number(roi.toFixed(2))
+      };
+    });
+
+  if (!sectorROIs.length) {
+    return { sector: 'N/A', roi: 0 };
+  }
+
+  return sectorROIs.reduce((best, current) => 
+    current.roi > best.roi ? current : best, 
+    sectorROIs[0]
+  );
+};
+
 // Update calculation helper with proper defaults
 const calculatePortfolioStats = (portfolioData) => {
   if (!portfolioData?.length) {
@@ -93,15 +131,60 @@ const calculatePortfolioStats = (portfolioData) => {
     dailyPnL: acc.dailyPnL + ((holding.current_price - holding.avg_price) * holding.quantity) || 0
   }), { totalValue: 0, investedValue: 0, dailyPnL: 0 });
 
-  // Calculate percentages only if we have non-zero values
-  stats.dailyPnLPercentage = stats.investedValue ? (stats.dailyPnL / stats.investedValue) * 100 : 0;
-  stats.totalReturn = stats.investedValue ? ((stats.totalValue - stats.investedValue) / stats.investedValue) * 100 : 0;
+  const bestSectorData = calculateBestSector(portfolioData);
 
-  // Add default sector data
-  stats.bestSector = 'N/A';
-  stats.bestSectorReturn = 0;
+  return {
+    ...stats,
+    dailyPnLPercentage: stats.investedValue ? (stats.dailyPnL / stats.investedValue) * 100 : 0,
+    totalReturn: stats.investedValue ? ((stats.totalValue - stats.investedValue) / stats.investedValue) * 100 : 0,
+    bestSector: bestSectorData.sector,
+    bestSectorReturn: bestSectorData.roi
+  };
+};
 
-  return stats;
+// Helper function to calculate daily win rate
+const calculateDailyWinRate = (portfolioData) => {
+  if (!portfolioData || portfolioData.length === 0) return {
+    winRate: 0,
+    dailyChange: 0,
+    isPositive: false
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+  const todayPortfolio = portfolioData.filter(item => 
+    new Date(item.date).toISOString().split('T')[0] === today
+  );
+
+  const previousDayPortfolio = portfolioData.filter(item => {
+    const itemDate = new Date(item.date);
+    itemDate.setDate(itemDate.getDate() + 1);
+    return itemDate.toISOString().split('T')[0] === today;
+  });
+
+  if (!todayPortfolio.length || !previousDayPortfolio.length) {
+    return {
+      winRate: 0,
+      dailyChange: 0,
+      isPositive: false
+    };
+  }
+
+  const todayValue = todayPortfolio.reduce((sum, item) => 
+    sum + (item.current_price * item.quantity), 0
+  );
+
+  const previousValue = previousDayPortfolio.reduce((sum, item) => 
+    sum + (item.current_price * item.quantity), 0
+  );
+
+  const dailyChange = ((todayValue - previousValue) / previousValue) * 100;
+  const isPositive = dailyChange > 0;
+
+  return {
+    winRate: Number(dailyChange.toFixed(2)),
+    dailyChange: Number(Math.abs(dailyChange).toFixed(2)),
+    isPositive
+  };
 };
 
 const Dashboard = () => {
@@ -119,6 +202,9 @@ const Dashboard = () => {
   const [sectorAllocation, setSectorAllocation] = useState([]);
   const [strategies, setStrategies] = useState([]);
   const [performanceData, setPerformanceData] = useState([]);
+  const [winRate, setWinRate] = useState(0);
+  const [dailyChange, setDailyChange] = useState(0);
+  const [isPositive, setIsPositive] = useState(false);
 
   // Update the fetchDashboardData function
   const fetchDashboardData = async () => {
@@ -247,6 +333,23 @@ const Dashboard = () => {
     };
 
     fetchStrategyData();
+  }, []);
+
+  // Update in useEffect
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const data = await getPortfolioData();
+        const dailyStats = calculateDailyWinRate(data);
+        setWinRate(dailyStats.winRate);
+        setDailyChange(dailyStats.dailyChange);
+        setIsPositive(dailyStats.isPositive);
+      } catch (err) {
+        console.error('Error fetching portfolio data:', err);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
 
   if (loading) return <div>Loading...</div>;

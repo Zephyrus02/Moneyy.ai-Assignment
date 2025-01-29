@@ -38,7 +38,7 @@ const Chart = ({
   data, 
   height = 400,
   title = "Chart",
-  type = "price", // 'price' or 'performance'
+  type = "price",
   showVolume = false,
   gradientColor = "#8884d8",
   dataKey = "value",
@@ -76,15 +76,6 @@ const Chart = ({
 
   return (
     <div className={`bg-white p-6 rounded-xl shadow-sm ${className}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <button 
-          onClick={zoomOut}
-          className="px-3 py-1 text-sm bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
-        >
-          Reset Zoom
-        </button>
-      </div>
       <div style={{ height: `${height}px` }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart

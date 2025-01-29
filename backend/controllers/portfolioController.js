@@ -177,35 +177,20 @@ exports.sellShares = async (req, res) => {
 exports.getPortfolio = async (req, res) => {
   try {
     const portfolio = await Portfolio.find();
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     
-    // Get current prices
-    const symbols = portfolio.map(item => item.symbol);
-    const prices = await Company.find({
-      symbol: { $in: symbols },
-      date: {
-        $gte: yesterday,
-        $lte: today
-      }
+    // Get company data to include sector information
+    const companies = await Company.find({
+      symbol: { $in: portfolio.map(p => p.symbol) }
     }).sort({ date: -1 });
 
+    // Transform portfolio data with sector info
     const portfolioData = portfolio.map(holding => {
-      const todayPrice = prices.find(
-        price => price.symbol === holding.symbol && 
-        new Date(price.date).toISOString().split('T')[0] === today
-      )?.closing_price || holding.avg_price;
-
-      const yesterdayPrice = prices.find(
-        price => price.symbol === holding.symbol && 
-        new Date(price.date).toISOString().split('T')[0] === yesterday
-      )?.closing_price || todayPrice;
-
+      const companyInfo = companies.find(c => c.symbol === holding.symbol);
       return {
         ...holding.toObject(),
-        current_price: todayPrice,
-        daily_change: ((todayPrice - yesterdayPrice) / yesterdayPrice) * 100,
-        total_value: holding.quantity * todayPrice
+        sector: companyInfo?.sector || 'Unknown',
+        current_price: companyInfo?.closing_price || holding.avg_price,
+        total_value: holding.quantity * (companyInfo?.closing_price || holding.avg_price)
       };
     });
 
@@ -306,6 +291,68 @@ exports.getSectorAllocation = async (req, res) => {
     ]);
     
     res.json(sectorData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getPortfolioHistory = async (req, res) => {
+  try {
+    const trades = await TradeHistory.find().sort('date');
+    const companies = await Company.find().sort('date');
+    
+    // Get last 30 days
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    const dailyValues = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      const dayStart = new Date(currentDate);
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59);
+
+      // Get portfolio snapshot for this date
+      const portfolioValue = await Portfolio.aggregate([
+        {
+          $lookup: {
+            from: 'companies',
+            localField: 'symbol',
+            foreignField: 'symbol',
+            pipeline: [
+              {
+                $match: {
+                  date: { $lte: dayEnd }
+                }
+              },
+              { $sort: { date: -1 } },
+              { $limit: 1 }
+            ],
+            as: 'latestPrice'
+          }
+        },
+        { $unwind: '$latestPrice' },
+        {
+          $group: {
+            _id: null,
+            value: {
+              $sum: { $multiply: ['$quantity', '$latestPrice.closing_price'] }
+            }
+          }
+        }
+      ]);
+
+      dailyValues.push({
+        date: currentDate.toISOString().split('T')[0],
+        value: portfolioValue[0]?.value || 0
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    res.json(dailyValues);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
