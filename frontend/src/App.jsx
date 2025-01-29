@@ -1,5 +1,5 @@
 import React from "react";
-import Footer  from './components/Footer';
+import Footer from './components/Footer';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
@@ -10,8 +10,8 @@ import { WalletProvider } from './context/WalletContext';
 
 const App = () => {
   return (
-    <WalletProvider>
-      <Router>
+    <Router>
+      <WalletProvider>
         <div className="flex flex-col min-h-screen bg-gray-50">
           <div className="flex min-h-screen bg-gray-50">
             <Sidebar />
@@ -26,8 +26,8 @@ const App = () => {
           </div>
           <Footer />
         </div>
-      </Router>
-    </WalletProvider>
+      </WalletProvider>
+    </Router>
   );
 };
 
