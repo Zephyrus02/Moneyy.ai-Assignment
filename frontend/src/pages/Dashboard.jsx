@@ -73,26 +73,33 @@ const calculateSectorReturns = (portfolioData) => {
   }));
 };
 
-// Update calculation helper 
+// Update calculation helper with proper defaults
 const calculatePortfolioStats = (portfolioData) => {
-  if (!portfolioData || portfolioData.length === 0) {
+  if (!portfolioData?.length) {
     return {
       totalValue: 0,
       investedValue: 0,
       dailyPnL: 0,
       dailyPnLPercentage: 0,
-      totalReturn: 0
+      totalReturn: 0,
+      bestSector: 'N/A',
+      bestSectorReturn: 0
     };
   }
 
   const stats = portfolioData.reduce((acc, holding) => ({
-    totalValue: acc.totalValue + (holding.current_price * holding.quantity),
-    investedValue: acc.investedValue + (holding.avg_price * holding.quantity),
-    dailyPnL: acc.dailyPnL + ((holding.current_price - holding.avg_price) * holding.quantity)
+    totalValue: acc.totalValue + (holding.current_price * holding.quantity) || 0,
+    investedValue: acc.investedValue + (holding.avg_price * holding.quantity) || 0,
+    dailyPnL: acc.dailyPnL + ((holding.current_price - holding.avg_price) * holding.quantity) || 0
   }), { totalValue: 0, investedValue: 0, dailyPnL: 0 });
 
-  stats.dailyPnLPercentage = (stats.dailyPnL / stats.investedValue) * 100;
-  stats.totalReturn = ((stats.totalValue - stats.investedValue) / stats.investedValue) * 100;
+  // Calculate percentages only if we have non-zero values
+  stats.dailyPnLPercentage = stats.investedValue ? (stats.dailyPnL / stats.investedValue) * 100 : 0;
+  stats.totalReturn = stats.investedValue ? ((stats.totalValue - stats.investedValue) / stats.investedValue) * 100 : 0;
+
+  // Add default sector data
+  stats.bestSector = 'N/A';
+  stats.bestSectorReturn = 0;
 
   return stats;
 };
@@ -118,13 +125,29 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const data = await getPortfolioData();
+      
+      if (!data?.length) {
+        setPortfolioData({
+          totalValue: 0,
+          dailyPnL: 0,
+          dailyPnLPercentage: 0,
+          winRate: 0,
+          bestSector: 'N/A',
+          bestSectorReturn: 0
+        });
+        setLoading(false);
+        return;
+      }
+
       const stats = calculatePortfolioStats(data);
       const sectorReturns = calculateSectorReturns(data);
       
-      // Find best performing sector
-      const bestSector = sectorReturns.reduce((best, current) => 
-        current.returnPercentage > best.returnPercentage ? current : best
-      );
+      // Find best sector only if we have sector data
+      const bestSector = sectorReturns?.length ? 
+        sectorReturns.reduce((best, current) => 
+          current.returnPercentage > best.returnPercentage ? current : best, 
+          { sector: 'N/A', returnPercentage: 0 }
+        ) : { sector: 'N/A', returnPercentage: 0 };
       
       setPortfolioData({
         totalValue: stats.totalValue,
@@ -196,16 +219,15 @@ const Dashboard = () => {
           return;
         }
 
-        const totalValue = data.reduce((sum, sector) => sum + sector.value, 0);
-        
         const transformedData = data.map(sector => ({
-          name: sector.sector,
-          value: Number(((sector.value / totalValue) * 100).toFixed(2))
+          name: sector.sector || 'Unknown',
+          value: Number(sector.value.toFixed(2))
         }));
         
         setSectorAllocation(transformedData);
       } catch (err) {
         console.error('Error fetching sector data:', err);
+        setSectorAllocation([]);
       }
     };
 

@@ -278,8 +278,19 @@ exports.getSectorAllocation = async (req, res) => {
   try {
     const sectorData = await Portfolio.aggregate([
       {
+        $lookup: {
+          from: 'companies',
+          localField: 'symbol',
+          foreignField: 'symbol',
+          as: 'companyData'
+        }
+      },
+      {
+        $unwind: '$companyData'
+      },
+      {
         $group: {
-          _id: '$sector',
+          _id: '$companyData.sector',
           value: {
             $sum: { $multiply: ['$quantity', '$avg_price'] }
           }
@@ -290,11 +301,6 @@ exports.getSectorAllocation = async (req, res) => {
           sector: '$_id',
           value: 1,
           _id: 0
-        }
-      },
-      {
-        $match: {
-          value: { $gt: 0 }
         }
       }
     ]);
