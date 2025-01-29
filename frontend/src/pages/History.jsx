@@ -15,8 +15,6 @@ import Wallet from '../components/Wallet';
 
 // Add calculation functions at the top
 const calculateTradeStats = (trades) => {
-  console.log('Calculating stats for trades:', trades); // Debug log
-  
   if (!trades || trades.length === 0) {
     return {
       totalInvested: 0,
@@ -27,40 +25,34 @@ const calculateTradeStats = (trades) => {
   }
 
   const stats = trades.reduce((acc, trade) => {
-    const quantity = Number(trade.quantity) || 0;
-    const buyPrice = Number(trade.buy_price) || 0;
-    const sellPrice = Number(trade.sell_price) || 0;
-    
-    const invested = quantity * buyPrice;
-    const received = sellPrice ? quantity * sellPrice : 0;
-    const isProfitable = received > invested;
-
-    console.log('Trade calculation:', { // Debug log
-      quantity,
-      buyPrice,
-      sellPrice,
-      invested,
-      received,
-      isProfitable
-    });
-
-    return {
-      totalInvested: acc.totalInvested + invested,
-      totalReceived: acc.totalReceived + received,
-      wins: acc.wins + (isProfitable ? 1 : 0),
-      totalPnL: acc.totalPnL + (received - invested)
-    };
+    // Calculate based on trade type
+    if (trade.type === 'BUY') {
+      return {
+        ...acc,
+        totalInvested: acc.totalInvested + (trade.price * trade.quantity)
+      };
+    } else if (trade.type === 'SELL') {
+      const saleAmount = trade.price * trade.quantity;
+      const pnl = trade.pnl || 0;
+      return {
+        ...acc,
+        totalReceived: acc.totalReceived + saleAmount,
+        wins: acc.wins + (pnl > 0 ? 1 : 0),
+        totalPnL: acc.totalPnL + pnl
+      };
+    }
+    return acc;
   }, { totalInvested: 0, totalReceived: 0, wins: 0, totalPnL: 0 });
 
-  const result = {
-    totalInvested: Number(stats.totalInvested.toFixed(2)) || 0,
-    totalReceived: Number(stats.totalReceived.toFixed(2)) || 0,
-    winRate: Number(((stats.wins / trades.length) * 100).toFixed(1)) || 0,
-    averagePnL: Number((stats.totalPnL / trades.length).toFixed(2)) || 0
+  // Calculate final stats
+  const completedTrades = trades.filter(t => t.type === 'SELL' && t.status === 'Completed').length;
+  
+  return {
+    totalInvested: Math.round(stats.totalInvested * 100) / 100,
+    totalReceived: Math.round(stats.totalReceived * 100) / 100,
+    winRate: completedTrades > 0 ? (stats.wins / completedTrades) * 100 : 0,
+    averagePnL: completedTrades > 0 ? stats.totalPnL / completedTrades : 0
   };
-
-  console.log('Final stats:', result); // Debug log
-  return result;
 };
 
 const History = () => {
@@ -83,26 +75,22 @@ const History = () => {
   const fetchTradeHistory = async () => {
     try {
       setLoading(true);
-      const data = await getTradeHistory({
-        startDate: filters.dateRange.start,
-        endDate: filters.dateRange.end,
-        type: filters.type !== 'all' ? filters.type : undefined,
-        status: filters.status !== 'all' ? filters.status : undefined
-      });
+      const data = await getTradeHistory();
       
-      console.log('Fetched trade data:', data); // Debug log
-      
-      // Transform data if needed
-      const transformedData = data.map(trade => ({
-        ...trade,
+      const transformedTrades = data.map(trade => ({
+        id: trade._id,
+        date: new Date(trade.date).toLocaleDateString(),
+        symbol: trade.symbol,
+        type: trade.type,
+        status: trade.status,
         quantity: Number(trade.quantity),
-        buy_price: Number(trade.buy_price),
-        sell_price: Number(trade.sell_price || 0)
+        price: Number(trade.price),
+        total: Number(trade.total),
+        pnl: Number(trade.pnl),
+        pnlPercent: Number(trade.pnlPercent)
       }));
       
-      console.log('Transformed trade data:', transformedData); // Debug log
-      
-      setTrades(transformedData);
+      setTrades(transformedTrades);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching trade history:', err);

@@ -84,8 +84,18 @@ exports.buyShares = async (req, res) => {
 exports.sellShares = async (req, res) => {
   try {
     const { symbol, quantity, sellDate } = req.body;
+    const parsedQuantity = parseInt(quantity);
 
-    // Get company data for sell date
+    const portfolio = await Portfolio.findOne({ symbol });
+    
+    if (!portfolio) {
+      return res.status(404).json({ error: 'Stock not found in portfolio' });
+    }
+
+    if (portfolio.quantity < parsedQuantity) {
+      return res.status(400).json({ error: 'Insufficient shares to sell' });
+    }
+
     const companyData = await Company.findOne({
       symbol,
       date: new Date(sellDate)
@@ -95,7 +105,7 @@ exports.sellShares = async (req, res) => {
       return res.status(404).json({ error: 'No price data found for this date' });
     }
 
-    // Create trade history with pending status
+    // Create trade with Pending status
     const tradeHistory = new TradeHistory({
       symbol,
       company_name: companyData.company_name,
@@ -104,51 +114,43 @@ exports.sellShares = async (req, res) => {
       status: 'Pending',
       date: new Date(sellDate),
       price: companyData.closing_price,
-      quantity: quantity,
-      total: companyData.closing_price * quantity,
-      pnl: (companyData.closing_price - portfolio.avg_price) * quantity,
+      quantity: parsedQuantity,
+      total: companyData.closing_price * parsedQuantity,
+      pnl: (companyData.closing_price - portfolio.avg_price) * parsedQuantity,
       pnlPercent: ((companyData.closing_price - portfolio.avg_price) / portfolio.avg_price) * 100
     });
 
     await tradeHistory.save();
 
-    // Set timeout to update status and wallet after 1 minute
+    // Update portfolio quantity
+    portfolio.quantity -= parsedQuantity;
+    if (portfolio.quantity === 0) {
+      await Portfolio.deleteOne({ symbol });
+    } else {
+      await portfolio.save();
+    }
+
+    // Send initial response
+    res.json({ 
+      message: 'Sell order placed successfully',
+      tradeId: tradeHistory._id,
+      status: 'Pending'
+    });
+
+    // Update status after 1 minute
     setTimeout(async () => {
       tradeHistory.status = 'Completed';
       await tradeHistory.save();
-
-      // Update portfolio after status is completed
-      const portfolio = await Portfolio.findOne({ symbol });
       
-      if (!portfolio || portfolio.quantity < quantity) {
-        return res.status(400).json({ error: 'Insufficient shares to sell' });
-      }
+      // Calculate final sale amount after completion
+      const saleAmount = companyData.closing_price * parsedQuantity;
+      
+      // The frontend will handle adding this amount to wallet
+      // when it receives the completed status
+    }, 60000);
 
-      portfolio.sell_dates.push(sellDate);
-      portfolio.sell_prices.push(companyData.closing_price);
-      portfolio.quantity -= parseInt(quantity);
-      portfolio.total_value -= companyData.closing_price * quantity;
-
-      // If quantity becomes 0, reset avg_price
-      if (portfolio.quantity === 0) {
-        portfolio.avg_price = 0;
-        portfolio.total_value = 0;
-      }
-
-      await portfolio.save();
-
-      // Return the sale amount to be added to wallet
-      const saleAmount = companyData.closing_price * quantity;
-      // The frontend will handle adding this amount to the wallet
-      res.json({ 
-        status: 'completed', 
-        saleAmount,
-        portfolio 
-      });
-    }, 60000); // 1 minute
-
-    res.json({ message: 'Sell order placed successfully', tradeId: tradeHistory._id });
   } catch (error) {
+    console.error('Sell shares error:', error);
     res.status(500).json({ error: error.message });
   }
 };
