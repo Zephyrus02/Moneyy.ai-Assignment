@@ -6,13 +6,20 @@ import {
   Info,
   X
 } from 'lucide-react';
+import { useWallet } from '../context/WalletContext';
 import FilterButton from '../components/FilterButton';
 import SearchBar from '../components/SearchBar';
 import Chart from '../components/Chart';
-import { getCompanyAnalytics, getCompanyData } from '../api';
+import { getCompanyAnalytics, getCompanyData, buyShares } from '../api';
 import Wallet from '../components/Wallet';
 
 const Strategy = () => {
+  // Add new state
+  const { balance, updateBalance } = useWallet();
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [buyQuantity, setBuyQuantity] = useState('');
+  const [selectedStockForBuy, setSelectedStockForBuy] = useState(null);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stocks, setStocks] = useState([]);
@@ -163,6 +170,34 @@ const Strategy = () => {
     });
   };
 
+  // Add buy handler
+  const handleBuy = async (stock, quantity) => {
+    try {
+      const totalCost = stock.price * quantity;
+      
+      if (totalCost > balance) {
+        alert('Insufficient funds');
+        return;
+      }
+
+      await buyShares({
+        symbol: stock.symbol,
+        quantity: parseInt(quantity),
+        buyDate: new Date().toISOString().split('T')[0]
+      });
+
+      // Update wallet balance
+      updateBalance(-totalCost);
+      
+      setShowBuyModal(false);
+      setBuyQuantity('');
+      setSelectedStockForBuy(null);
+    } catch (error) {
+      console.error('Error buying shares:', error);
+      alert('Failed to buy shares: ' + error.message);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
 
@@ -303,21 +338,29 @@ const Strategy = () => {
             {filteredStocks.map(stock => (
               <div 
                 key={stock.symbol}
-                className={`p-4 cursor-pointer hover:bg-gray-50 ${
+                className={`p-4 hover:bg-gray-50 ${
                   selectedStock?.symbol === stock.symbol ? 'bg-purple-50' : ''
                 }`}
-                onClick={() => setSelectedStock(stock)}
               >
                 <div className="flex justify-between items-start mb-2">
-                  <div>
+                  <div className="cursor-pointer" onClick={() => setSelectedStock(stock)}>
                     <h3 className="font-medium">{stock.symbol}</h3>
                     <p className="text-sm text-gray-500">{stock.name}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="flex flex-col items-end">
                     <div className="font-medium">${stock.price.toFixed(2)}</div>
                     <div className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                       {stock.change >= 0 ? '+' : ''}{stock.change}%
                     </div>
+                    <button
+                      className="mt-2 px-4 py-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                      onClick={() => {
+                        setSelectedStockForBuy(stock);
+                        setShowBuyModal(true);
+                      }}
+                    >
+                      Buy
+                    </button>
                   </div>
                 </div>
                 <div className="text-xs text-gray-500 flex justify-between">
@@ -329,6 +372,53 @@ const Strategy = () => {
             ))}
           </div>
         </div>
+
+        {/* Buy Modal */}
+        {showBuyModal && selectedStockForBuy && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-96">
+              <h3 className="text-xl font-bold mb-4">Buy {selectedStockForBuy.symbol}</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={buyQuantity}
+                  onChange={(e) => setBuyQuantity(e.target.value)}
+                  className="w-full p-2 border rounded-lg"
+                />
+              </div>
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Total Cost: ${((selectedStockForBuy.price * buyQuantity) || 0).toFixed(2)}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Available Balance: ${balance.toLocaleString()}
+                </p>
+              </div>
+              <div className="flex justify-end space-x-4">
+                <button
+                  className="px-4 py-2 text-gray-600"
+                  onClick={() => {
+                    setShowBuyModal(false);
+                    setBuyQuantity('');
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-purple-500 text-white rounded-lg"
+                  onClick={() => handleBuy(selectedStockForBuy, buyQuantity)}
+                  disabled={!buyQuantity || buyQuantity <= 0 || selectedStockForBuy.price * buyQuantity > balance}
+                >
+                  Buy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stock Details */}
         <div className="col-span-8">

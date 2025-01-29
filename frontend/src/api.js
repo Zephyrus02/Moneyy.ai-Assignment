@@ -80,7 +80,11 @@ export const getPortfolioData = async () => {
 export const buyShares = async (params) => {
   try {
     const { symbol, quantity, buyDate } = params;
-    const response = await api.post('/buy', null, { params });
+    const response = await api.post('/buy', {
+      symbol,
+      quantity: parseInt(quantity),
+      buyDate
+    });
     return response.data;
   } catch (error) {
     throw error;

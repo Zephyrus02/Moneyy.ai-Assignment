@@ -14,33 +14,39 @@ const calculateWinRate = (portfolioData) => {
   if (!portfolioData || portfolioData.length === 0) return 0;
   
   const winningTrades = portfolioData.filter(trade => trade.dailyPnL > 0);
-  return (winningTrades.length / portfolioData.length) * 100;
+  return Number(((winningTrades.length / portfolioData.length) * 100).toFixed(2));
 };
 
-// Add this function at the top level
+// Strategy metrics calculation
 const calculateStrategyMetrics = (portfolio) => {
   return portfolio
-    .map(stock => ({
-      id: stock.symbol,
-      name: stock.symbol,
-      roi: ((stock.current_price - stock.avg_price) / stock.avg_price) * 100,
-      cagr: calculateCAGR(stock.avg_price, stock.current_price),
-      drawdown: calculateDrawdown(stock.current_price, stock.avg_price),
-      allocation: (stock.total_value / portfolio.reduce((sum, s) => sum + s.total_value, 0)) * 100
-    }))
+    .map(stock => {
+      const roi = ((stock.current_price - stock.avg_price) / stock.avg_price) * 100;
+      const cagr = calculateCAGR(stock.avg_price, stock.current_price);
+      const drawdown = calculateDrawdown(stock.current_price, stock.avg_price);
+      const totalPortfolioValue = portfolio.reduce((sum, s) => sum + s.total_value, 0);
+      const allocation = (stock.total_value / totalPortfolioValue) * 100;
+
+      return {
+        id: stock.symbol,
+        name: stock.symbol,
+        roi: Number(roi),
+        cagr: Number(cagr),
+        drawdown: Number(drawdown),
+        allocation: Number(allocation)
+      };
+    })
     .sort((a, b) => b.roi - a.roi)
     .slice(0, 3);
 };
 
-// Add helper functions
 const calculateCAGR = (startPrice, endPrice) => {
-  const timePeriod = 1; // Assuming 1 year for simplicity
-  return ((Math.pow(endPrice / startPrice, 1 / timePeriod) - 1) * 100).toFixed(1);
+  const timePeriod = 1;
+  return Number((Math.pow(endPrice / startPrice, 1 / timePeriod) - 1) * 100).toFixed(2);
 };
 
 const calculateDrawdown = (currentPrice, avgPrice) => {
-  const maxPrice = Math.max(currentPrice, avgPrice);
-  return ((currentPrice - maxPrice) / maxPrice * 100).toFixed(1);
+  return Number(((avgPrice - currentPrice) / avgPrice) * 100).toFixed(2);
 };
 
 // Add this helper function after other helper functions
@@ -136,9 +142,15 @@ const Dashboard = () => {
     }
   };
 
+  // Update fetchRecentTrades function
   const fetchRecentTrades = async () => {
     try {
       const data = await getRecentTrades(3);
+      if (!data || data.length === 0) {
+        setRecentTrades([]);
+        return;
+      }
+      
       const transformedTrades = data.map(trade => ({
         id: trade._id,
         symbol: trade.symbol,
@@ -150,6 +162,7 @@ const Dashboard = () => {
       setRecentTrades(transformedTrades);
     } catch (err) {
       console.error('Error fetching recent trades:', err);
+      setRecentTrades([]);
     }
   };
 
@@ -289,7 +302,16 @@ const Dashboard = () => {
           strategies={strategies} 
           onStrategyClick={setSelectedStrategy}
         />
-        <RecentTrades trades={recentTrades} />
+        {recentTrades.length > 0 ? (
+          <RecentTrades trades={recentTrades} />
+        ) : (
+          <div className="bg-white p-6 rounded-xl shadow-sm">
+            <h2 className="text-xl font-semibold mb-6">Recent Trades</h2>
+            <div className="text-gray-500 text-center py-8">
+              No trades available
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

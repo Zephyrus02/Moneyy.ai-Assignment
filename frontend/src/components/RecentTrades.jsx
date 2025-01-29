@@ -14,7 +14,7 @@ const RecentTrades = ({ trades }) => {
               <span className="ml-2 font-medium">{trade.symbol}</span>
             </div>
             <div className="text-right">
-              <div className="font-medium">${trade.price}</div>
+              <div className="font-medium">${trade.price.toFixed(2)}</div>
               <div className="text-sm text-gray-500">{trade.amount} shares</div>
             </div>
           </div>

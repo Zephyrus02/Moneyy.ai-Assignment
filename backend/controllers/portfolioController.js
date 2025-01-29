@@ -4,7 +4,7 @@ const Company = require('../models/Company');
 
 exports.buyShares = async (req, res) => {
   try {
-    const { symbol, quantity, buyDate } = req.query;
+    const { symbol, quantity, buyDate } = req.body; // Changed from req.query to req.body
     const parsedQuantity = parseInt(quantity);
 
     const companyData = await Company.findOne({

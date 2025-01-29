@@ -7,7 +7,7 @@ router.get('/company-data', companyController.getCompanyData);
 router.get('/portfolio-performance', companyController.getPortfolioPerformance);
 router.get('/strategy-analytics', companyController.getStrategyAnalytics);
 router.get('/sector-allocation', portfolioController.getSectorAllocation);
-router.post('/buy', portfolioController.buyShares);
+router.post('/buy', express.json(), portfolioController.buyShares);
 router.post('/sell', portfolioController.sellShares);
 router.get('/portfolio', portfolioController.getPortfolio);
 router.get('/trade-history', portfolioController.getTradeHistory);
