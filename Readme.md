@@ -17,9 +17,9 @@ cd MoneyyAI
 npm install mongodb
 ```
 
-2. Run dataGeneraation.js
+2. Run dataGeneration.js
 ```bash
-node dataGeneraation.js
+node dataGeneration.js
 ```
 
 3. Install Packages:
