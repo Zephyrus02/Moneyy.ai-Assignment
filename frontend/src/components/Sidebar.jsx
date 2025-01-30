@@ -4,7 +4,8 @@ import {
   LayoutDashboard, 
   PieChart as PieChartIcon, 
   LineChart as LineChartIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  SplitSquareHorizontal as CompareIcon
 } from 'lucide-react';
 
 const MenuItem = ({ icon: Icon, text, path, isActive, navigate }) => (
@@ -57,6 +58,13 @@ const Sidebar = () => {
           text="Trade History" 
           path="/history"
           isActive={location.pathname === '/history'}
+          navigate={navigate}
+        />
+        <MenuItem 
+          icon={CompareIcon}
+          text="Compare Stocks"
+          path="/compare"
+          isActive={location.pathname === '/compare'}
           navigate={navigate}
         />
       </div>

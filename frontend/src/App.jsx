@@ -6,6 +6,7 @@ import Portfolio from './pages/Portfolio';
 import Strategy from './pages/Strategy';
 import History from './pages/History';
 import Sidebar from './components/Sidebar';
+import Compare from "./pages/Compare";
 import { WalletProvider } from './context/WalletContext';
 
 const App = () => {
@@ -21,6 +22,7 @@ const App = () => {
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/strategy" element={<Strategy />} />
                 <Route path="/history" element={<History />} />
+                <Route path="/compare" element={<Compare />} />
               </Routes>
             </div>
           </div>
