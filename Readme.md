@@ -12,7 +12,7 @@ A web application for managing stock portfolios with real-time analytics and per
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/Zephyrus02/Moneyy.ai-Assignment.git
 cd MoneyyAI
 ```
 
