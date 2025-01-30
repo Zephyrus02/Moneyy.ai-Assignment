@@ -3,10 +3,12 @@ const TradeHistory = require('../models/TradeHistory');
 const Company = require('../models/Company');
 const User = require('../models/User');
 
+const USER_ID = process.env.USER_ID;
+
 exports.buyShares = async (req, res) => {
   try {
     const { symbol, quantity, buyDate } = req.body;
-    const userId = "679a3497cf47a1fb86c7f84f";
+    const userId = USER_ID;
     const parsedQuantity = parseInt(quantity);
 
     // Get user and check balance

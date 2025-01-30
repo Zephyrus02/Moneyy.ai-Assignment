@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const USER_ID = process.env.USER_ID;
 
 exports.updateBalance = async (req, res) => {
   try {
@@ -24,7 +25,7 @@ exports.updateBalance = async (req, res) => {
 
 exports.getBalance = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = USER_ID;
     const user = await User.findById(userId);
     
     if (!user) {
