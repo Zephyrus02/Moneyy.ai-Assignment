@@ -7,41 +7,69 @@ import PieChart from '../components/PieChart';
 import StrategyPerformance from '../components/StrategyPerformance';
 import RecentTrades from '../components/RecentTrades';
 import Wallet from '../components/Wallet';
-import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData, getTradeHistory } from '../api';
+import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData, getTradeHistory, getCompanyData } from '../api';
 
 // Strategy metrics calculation
-const calculateStrategyMetrics = (portfolio) => {
-  return portfolio
-    .map(stock => {
-      const roi = ((stock.current_price - stock.avg_price) / stock.avg_price) * 100;
-      const cagr = calculateCAGR(stock.avg_price, stock.current_price);
-      const drawdown = calculateDrawdown(stock.current_price, stock.avg_price);
-      const totalPortfolioValue = portfolio.reduce((sum, s) => sum + s.total_value, 0);
-      const allocation = (stock.total_value / totalPortfolioValue) * 100;
+const calculateStrategyMetrics = async (portfolio) => {
+  return await Promise.all(portfolio.map(async stock => {
+    const historicalData = await getCompanyData({
+      symbol: stock.symbol,
+      startDate: '2025-01-01',
+      endDate: new Date().toISOString()
+    });
 
-      return {
-        id: stock.symbol,
-        name: stock.symbol,
-        roi: Number(roi),
-        cagr: Number(cagr),
-        drawdown: Number(drawdown),
-        allocation: Number(allocation)
-      };
-    })
-    .sort((a, b) => b.roi - a.roi)
-    .slice(0, 3);
+    const startPrice = historicalData[0]?.closing_price || stock.avg_price;
+    const endPrice = stock.current_price;
+    
+    const roi = ((endPrice - stock.avg_price) / stock.avg_price) * 100;
+    const cagr = calculateCAGR(startPrice, endPrice);
+    const drawdown = calculateDrawdown(historicalData);
+    const totalPortfolioValue = portfolio.reduce((sum, s) => sum + s.total_value, 0);
+    const allocation = (stock.total_value / totalPortfolioValue) * 100;
+
+    return {
+      id: stock.symbol,
+      name: stock.symbol,
+      roi: Number(roi.toFixed(2)),
+      cagr: cagr,
+      drawdown: drawdown,
+      allocation: Number(allocation.toFixed(2))
+    };
+  }))
+  .then(metrics => metrics.sort((a, b) => b.roi - a.roi).slice(0, 3));
 };
 
 const calculateCAGR = (startPrice, endPrice) => {
-  const timePeriod = 1;
-  return Number((Math.pow(endPrice / startPrice, 1 / timePeriod) - 1) * 100).toFixed(2);
+  // Fixed start date of 2025-01-01
+  const startDate = new Date('2025-01-01');
+  const endDate = new Date();
+  
+  // Calculate time period in years
+  const timePeriodInYears = (endDate - startDate) / (365 * 24 * 60 * 60 * 1000);
+  
+  if (timePeriodInYears === 0) return 0;
+
+  // Calculate CAGR
+  const cagr = (Math.pow(endPrice / startPrice, 1 / timePeriodInYears) - 1) * 100;
+  return Number(cagr.toFixed(2));
 };
 
-const calculateDrawdown = (currentPrice, avgPrice) => {
-  return Number(((avgPrice - currentPrice) / avgPrice) * 100).toFixed(2);
+const calculateDrawdown = (historicalData) => {
+  if (!historicalData || historicalData.length === 0) return 0;
+  
+  let maxPrice = historicalData[0].closing_price;
+  let maxDrawdown = 0;
+
+  historicalData.forEach(dataPoint => {
+    const currentPrice = dataPoint.closing_price;
+    maxPrice = Math.max(maxPrice, currentPrice);
+    const currentDrawdown = ((maxPrice - currentPrice) / maxPrice) * 100;
+    maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
+  });
+
+  return Number(maxDrawdown.toFixed(2));
 };
 
-// Add this helper function after other helper functions
 const calculateSectorReturns = (portfolioData) => {
   // Group holdings by sector and calculate returns
   const sectorReturns = portfolioData.reduce((acc, holding) => {
@@ -356,7 +384,7 @@ const Dashboard = () => {
     const fetchStrategyData = async () => {
       try {
         const portfolioData = await getPortfolioData();
-        const strategyData = calculateStrategyMetrics(portfolioData);
+        const strategyData = await calculateStrategyMetrics(portfolioData);
         setStrategies(strategyData);
       } catch (err) {
         console.error('Error fetching strategy data:', err);
