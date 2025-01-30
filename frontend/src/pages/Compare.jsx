@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { getCompanyAnalytics, getCompanyData } from '../api';
 import Chart from '../components/Chart';
 import { Info } from 'lucide-react';
+import { useWallet } from '../context/WalletContext';
+import { buyShares } from '../api';
 
 const Compare = () => {
   const [sectors, setSectors] = useState([]);
@@ -14,6 +16,10 @@ const Compare = () => {
   const [leftStockData, setLeftStockData] = useState(null);
   const [rightStockData, setRightStockData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [selectedStockForBuy, setSelectedStockForBuy] = useState(null);
+  const [buyQuantity, setBuyQuantity] = useState('');
+  const { balance, updateBalance } = useWallet();
 
   // Fetch sectors on mount
   useEffect(() => {
@@ -107,6 +113,32 @@ const Compare = () => {
     return data;
   };
 
+  const handleBuy = async (stock, quantity) => {
+    try {
+      const totalCost = Number((stock.avgPrice * quantity).toFixed(2));
+      
+      if (totalCost > balance) {
+        alert('Insufficient funds');
+        return;
+      }
+
+      await buyShares({
+        symbol: stock.symbol,
+        quantity: parseInt(quantity),
+        buyDate: new Date().toISOString().split('T')[0]
+      });
+
+      updateBalance(-totalCost);
+      
+      setShowBuyModal(false);
+      setBuyQuantity('');
+      setSelectedStockForBuy(null);
+    } catch (error) {
+      console.error('Error buying shares:', error);
+      alert('Failed to buy shares: ' + error.message);
+    }
+  };
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-8">Compare Stocks</h1>
@@ -158,7 +190,14 @@ const Compare = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
               </div>
             ) : leftStock ? (
-              <StockDetails stock={leftStock} data={leftStockData} />
+              <StockDetails 
+                stock={leftStock} 
+                data={leftStockData}
+                onBuyClick={(stock) => {
+                  setSelectedStockForBuy(stock);
+                  setShowBuyModal(true);
+                }}
+              />
             ) : (
               <div className="flex items-center justify-center h-64 text-gray-400">
                 Select first stock to compare
@@ -190,7 +229,14 @@ const Compare = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
               </div>
             ) : rightStock ? (
-              <StockDetails stock={rightStock} data={rightStockData} />
+              <StockDetails 
+                stock={rightStock} 
+                data={rightStockData}
+                onBuyClick={(stock) => {
+                  setSelectedStockForBuy(stock);
+                  setShowBuyModal(true);
+                }}
+              />
             ) : (
               <div className="flex items-center justify-center h-64 text-gray-400">
                 Select second stock to compare
@@ -199,46 +245,144 @@ const Compare = () => {
           </div>
         </div>
       )}
+
+      {/* Add Buy Modal */}
+      {showBuyModal && selectedStockForBuy && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-96">
+            <h3 className="text-xl font-bold mb-4">Buy {selectedStockForBuy.symbol}</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={buyQuantity}
+                onChange={(e) => setBuyQuantity(e.target.value)}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                Total Cost: ${Number((selectedStockForBuy.avgPrice * buyQuantity) || 0).toFixed(2)}
+              </p>
+              <p className="text-sm text-gray-600">
+                Available Balance: ${Number(balance).toFixed(2)}
+              </p>
+            </div>
+            <div className="flex justify-end space-x-4">
+              <button
+                className="px-4 py-2 text-gray-600"
+                onClick={() => {
+                  setShowBuyModal(false);
+                  setBuyQuantity('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-purple-500 text-white rounded-lg"
+                onClick={() => handleBuy(selectedStockForBuy, buyQuantity)}
+                disabled={!buyQuantity || buyQuantity <= 0 || selectedStockForBuy.avgPrice * buyQuantity > balance}
+              >
+                Buy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-const StockDetails = ({ stock, data }) => (
-  <>
-    <h2 className="text-2xl font-bold mb-2">{stock.symbol}</h2>
-    <p className="text-gray-500 mb-6">{stock.companyName}</p>
-    
-    <div className="grid grid-cols-2 gap-4 mb-6">
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="text-sm text-gray-500">Price</div>
-        <div className="font-bold">${stock.avgPrice?.toFixed(2)}</div>
-      </div>
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="text-sm text-gray-500">Volume</div>
-        <div className="font-bold">{(stock.totalVolume/1000000).toFixed(1)}M</div>
-      </div>
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="text-sm text-gray-500">P/E Ratio</div>
-        <div className="font-bold">{(stock.avgPrice / (Math.random() * 5 + 1)).toFixed(2)}</div>
-      </div>
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="text-sm text-gray-500">Performance</div>
-        <div className={`font-bold ${stock.avgPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-          {stock.avgPnL?.toFixed(2)}%
+const StockDetails = ({ 
+  stock, 
+  data, 
+  onBuyClick 
+}) => {
+  // Helper calculations
+  const calculateMarketCap = (price, volume) => {
+    const cap = price * volume;
+    return cap >= 1e12 ? `${(cap/1e12).toFixed(1)}T` :
+           cap >= 1e9 ? `${(cap/1e9).toFixed(1)}B` :
+           `${(cap/1e6).toFixed(1)}M`;
+  };
+
+  const calculatePE = (price) => {
+    return (price / (Math.random() * 5 + 1)).toFixed(1);
+  };
+
+  const calculateDividend = (pnl) => {
+    return (Math.abs(pnl || 0) * 0.3).toFixed(2);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Stock Info */}
+      <div className="bg-white rounded-xl">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-2xl font-bold">{stock.name || stock.symbol}</h2>
+            <p className="text-gray-500">{stock.sector}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold">${stock.avgPrice?.toFixed(2)}</div>
+            <div className={`text-lg ${stock.avgPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {stock.avgPnL >= 0 ? '+' : ''}{stock.avgPnL?.toFixed(2)}%
+            </div>
+            <button
+              className="mt-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+              onClick={() => onBuyClick(stock)}
+            >
+              Buy
+            </button>
+          </div>
+        </div>
+
+        {/* Stock Stats */}
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Market Cap</div>
+            <div className="font-bold">
+              {calculateMarketCap(stock.avgPrice, stock.totalVolume)}
+            </div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Volume</div>
+            <div className="font-bold">
+              {(stock.totalVolume/1000000).toFixed(1)}M
+            </div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">P/E Ratio</div>
+            <div className="font-bold">
+              {calculatePE(stock.avgPrice)}
+            </div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Dividend Yield</div>
+            <div className="font-bold">
+              {calculateDividend(stock.avgPnL)}%
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <Chart 
-      data={data}
-      title="Price History"
-      type="price"
-      showVolume={true}
-      dataKey="closing_price"
-      gradientColor="#82ca9d"
-      height={300}
-    />
-  </>
-);
+      {/* Price Chart */}
+      {data && (
+        <Chart 
+          data={data}
+          title="Price History"
+          type="price"
+          showVolume={true}
+          dataKey="closing_price"
+          gradientColor="#82ca9d"
+          height={300}
+        />
+      )}
+    </div>
+  );
+};
 
 export default Compare;
