@@ -380,8 +380,8 @@ const History = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="px-2 py-1 rounded-full text-sm bg-green-100 text-green-800">
-                    {trade.status || 'N/A'}
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(trade.status)}`}>
+                    {trade.status}
                   </span>
                 </td>
               </tr>
@@ -406,6 +406,17 @@ const calculatePnLPercent = (trade) => {
     return 0;
   }
   return ((trade.price - trade.avgPrice) / trade.avgPrice) * 100;
+};
+
+const getStatusColor = (status) => {
+  switch(status.toLowerCase()) {
+    case 'pending':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'completed':
+      return 'bg-green-100 text-green-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
 };
 
 export default History;
