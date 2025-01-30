@@ -14,6 +14,7 @@ A web application for managing stock portfolios with real-time analytics and per
 ```bash
 git clone https://github.com/Zephyrus02/Moneyy.ai-Assignment.git
 cd MoneyyAI
+npm install mongodb
 ```
 
 2. Run dataGeneraation.js
