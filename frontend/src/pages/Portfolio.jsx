@@ -88,18 +88,21 @@ const Portfolio = () => {
   const filteredPortfolio = portfolio.filter(holding => {
     const searchMatch = holding.symbol.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Add your existing filter logic here
+    // Shares filter
     const sharesFilter = (!filters.shares.min || holding.shares >= Number(filters.shares.min)) &&
                         (!filters.shares.max || holding.shares <= Number(filters.shares.max));
     
+    // Performance filter - using totalReturn
     const performanceFilter = filters.performance === 'all' ||
-                            (filters.performance === 'positive' && holding.dailyChange > 0) ||
-                            (filters.performance === 'negative' && holding.dailyChange < 0);
+                            (filters.performance === 'positive' && holding.totalReturn > 0) ||
+                            (filters.performance === 'negative' && holding.totalReturn < 0);
     
+    // Sector filter
     const sectorFilter = filters.sector === 'all' || holding.sector === filters.sector;
     
-    const valueFilter = (!filters.value.min || holding.value >= Number(filters.value.min)) &&
-                       (!filters.value.max || holding.value <= Number(filters.value.max));
+    // Value filter
+    const valueFilter = (!filters.value.min || holding.currentValue >= Number(filters.value.min)) &&
+                       (!filters.value.max || holding.currentValue <= Number(filters.value.max));
     
     return searchMatch && sharesFilter && performanceFilter && sectorFilter && valueFilter;
   });
@@ -233,9 +236,9 @@ const Portfolio = () => {
               value={filters.performance}
               onChange={e => setFilters({...filters, performance: e.target.value})}
             >
-              <option value="all">All</option>
-              <option value="positive">Positive</option>
-              <option value="negative">Negative</option>
+              <option value="all">All Returns</option>
+              <option value="positive">Positive Returns</option>
+              <option value="negative">Negative Returns</option>
             </select>
           </div>
 

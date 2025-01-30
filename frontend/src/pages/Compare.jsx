@@ -4,6 +4,7 @@ import Chart from '../components/Chart';
 import { Info } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { buyShares } from '../api';
+import Wallet from '../components/Wallet';
 
 const Compare = () => {
   const [sectors, setSectors] = useState([]);
@@ -141,7 +142,13 @@ const Compare = () => {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-8">Compare Stocks</h1>
+      {/* Header with Wallet */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Compare Stocks</h1>
+        <div className="flex items-center space-x-4">
+          <Wallet />
+        </div>
+      </div>
 
       {/* Sector Selection */}
       <div className="mb-8">

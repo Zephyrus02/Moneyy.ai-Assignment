@@ -66,8 +66,8 @@ const History = () => {
     type: 'all',
     status: 'all',
     dateRange: {
-      start: null,
-      end: null
+      start: '',
+      end: ''
     }
   });
 
@@ -149,24 +149,45 @@ const History = () => {
       type: 'all',
       status: 'all',
       dateRange: {
-        start: null,
-        end: null
+        start: '',
+        end: ''
       }
     });
   };
 
   // Filter trades based on search term
-  const filteredTrades = trades.filter(trade => 
-    trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    trade.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTrades = trades.filter(trade => {
+    // Type filter
+    const typeMatch = filters.type === 'all' || trade.type === filters.type;
+    
+    // Status filter
+    const statusMatch = filters.status === 'all' || trade.status === filters.status;
+    
+    // Date range filter
+    const dateMatch = (!filters.dateRange.start || new Date(trade.date) >= new Date(filters.dateRange.start)) &&
+                     (!filters.dateRange.end || new Date(trade.date) <= new Date(filters.dateRange.end));
+    
+    return typeMatch && statusMatch && dateMatch;
+  });
 
   // Sort filtered trades
-  const sortedTrades = [...filteredTrades].sort((a, b) => {
-    if (sortConfig.direction === 'asc') {
-      return a[sortConfig.key] > b[sortConfig.key] ? 1 : -1;
+  const sortedTrades = filteredTrades.sort((a, b) => {
+    const direction = sortConfig.direction === 'asc' ? 1 : -1;
+    
+    switch(sortConfig.key) {
+      case 'date':
+        return direction * (new Date(b.date) - new Date(a.date));
+      case 'price':
+        return direction * (b.price - a.price);
+      case 'quantity':
+        return direction * (b.quantity - a.quantity);
+      case 'total':
+        return direction * ((b.quantity * b.price) - (a.quantity * a.price));
+      case 'pnl':
+        return direction * (b.pnl - a.pnl);
+      default:
+        return 0;
     }
-    return a[sortConfig.key] < b[sortConfig.key] ? 1 : -1;
   });
 
   const tradeStats = calculateTradeStats(trades);
