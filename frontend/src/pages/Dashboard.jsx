@@ -7,7 +7,7 @@ import PieChart from '../components/PieChart';
 import StrategyPerformance from '../components/StrategyPerformance';
 import RecentTrades from '../components/RecentTrades';
 import Wallet from '../components/Wallet';
-import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData } from '../api';
+import { getDashboardData, getRecentTrades, getSectorAllocation, getPortfolioData, getTradeHistory } from '../api';
 
 // Strategy metrics calculation
 const calculateStrategyMetrics = (portfolio) => {
@@ -275,15 +275,46 @@ const Dashboard = () => {
     }
   };
 
+  // Update fetchPerformanceData function
   const fetchPerformanceData = async () => {
     try {
-      const data = await getPortfolioData();
-      const performanceHistory = data.map(item => ({
-        date: new Date(),
-        value: item.total_value,
-        change: item.daily_change
-      }));
-      setPerformanceData(performanceHistory);
+      const trades = await getTradeHistory();
+      const portfolioHistory = [];
+      let totalInvested = 0;
+      let currentValue = 0;
+
+      // Sort trades by date
+      const sortedTrades = trades.sort((a, b) => new Date(a.date) - new Date(b.date));
+      const startDate = new Date(sortedTrades[0]?.date || new Date());
+
+      // Create daily portfolio value entries
+      for (let d = new Date(startDate); d <= new Date(); d.setDate(d.getDate() + 1)) {
+        const currentDate = d.toISOString().split('T')[0];
+        
+        // Find trades for this date
+        const dayTrades = sortedTrades.filter(trade => 
+          new Date(trade.date).toISOString().split('T')[0] === currentDate
+        );
+
+        // Update portfolio value based on trades
+        dayTrades.forEach(trade => {
+          if (trade.type === 'BUY') {
+            totalInvested += trade.price * trade.quantity;
+            currentValue += trade.price * trade.quantity;
+          } else if (trade.type === 'SELL') {
+            currentValue -= trade.price * trade.quantity;
+          }
+        });
+
+        portfolioHistory.push({
+          date: new Date(currentDate),
+          value: currentValue,
+          invested: totalInvested,
+          change: ((currentValue - totalInvested) / totalInvested * 100) || 0
+        });
+      }
+
+      setPerformanceData(portfolioHistory);
     } catch (err) {
       console.error('Error fetching performance data:', err);
     }
@@ -401,11 +432,16 @@ const Dashboard = () => {
         <div className="col-span-2">
           <Chart 
             data={performanceData}
-            title="Portfolio Performance"
+            title="Portfolio Growth"
             type="performance"
-            showVolume={true}
+            showVolume={false}
+            dataKey="value"
+            compareKey="invested"
             gradientColor="#8B5CF6"
             height={400}
+            xAxisFormatter={(date) => new Date(date).toLocaleDateString()}
+            tooltipFormatter={(value) => `$${value.toLocaleString()}`}
+            tooltipLabelFormatter={(date) => new Date(date).toLocaleDateString()}
           />
         </div>
 
